@@ -12,74 +12,79 @@ const defaults = {
 const remoteCar = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Mercedes-Benz_G-Class.jpg";
 const saved = JSON.parse(localStorage.getItem("autoglass-data") || "null") || defaults;
 const imageKey = "autoglass-photo";
+const DB_NAME = "AutoGlassDB";
+const STORE_NAME = "photos";
 
-document.querySelectorAll("[data-key]").forEach(el=>{
-  const key=el.dataset.key;
-  el.textContent = saved[key] ?? defaults[key];
-  el.addEventListener("blur",()=>saveText(el,key));
-  el.addEventListener("keydown",e=>{
-    if(e.key==="Enter"){e.preventDefault();el.blur();}
+function openPhotoDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
-  el.addEventListener("paste",e=>{
-    e.preventDefault();
-    document.execCommand("insertText",false,(e.clipboardData||window.clipboardData).getData("text"));
+}
+
+async function savePhoto(file){
+  const db = await openPhotoDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE_NAME,"readwrite");
+    tx.objectStore(STORE_NAME).put(file,imageKey);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
   });
-});
-
-function saveText(el,key){
-  saved[key]=el.textContent.trim();
-  localStorage.setItem("autoglass-data",JSON.stringify(saved));
-  if(key==="fuelPercent") updateFuel(el.textContent);
 }
-function updateFuel(value){
-  let n=parseInt(value.replace(/\D/g,""),10);
-  if(Number.isNaN(n)) n=0;
-  n=Math.max(0,Math.min(100,n));
-  document.getElementById("fuelFill").style.width=n+"%";
-}
-updateFuel(saved.fuelPercent);
 
-const img=document.getElementById("carImage");
-const dots=document.getElementById("dots");
-const photoInput=document.getElementById("photoInput");
-const localPhoto=localStorage.getItem(imageKey);
-img.src=localPhoto || remoteCar;
+async function loadPhoto(){
+  try{
+    const db = await openPhotoDB();
+    return await new Promise((resolve,reject)=>{
+      const req = db.transaction(STORE_NAME,"readonly").objectStore(STORE_NAME).get(imageKey);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+
+const img = document.getElementById("carImage");
+const dots = document.getElementById("dots");
+const photoInput = document.getElementById("photoInput");
+
+img.src = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Mercedes-Benz_G-Class.jpg";
 
 for(let i=0;i<5;i++){
   const d=document.createElement("span");
   d.className="dot"+(i===0?" active":"");
   dots.appendChild(d);
 }
+
 function toast(msg){
   const t=document.getElementById("toast");
-  t.textContent=msg;t.classList.add("show");
-  clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),1300);
+  t.textContent=msg;
+  t.classList.add("show");
+  clearTimeout(window.__toast);
+  window.__toast=setTimeout(()=>t.classList.remove("show"),1300);
 }
-document.querySelector(".photo-touch").addEventListener("click",()=>{
-  photoInput.click();
-});
-photoInput.addEventListener("change",e=>{
-  const file=e.target.files?.[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    localStorage.setItem(imageKey,reader.result);
-    img.src=reader.result;
-    toast("Фото автомобиля обновлено");
-  };
-  reader.readAsDataURL(file);
+
+loadPhoto().then(file=>{
+  if(file) img.src=URL.createObjectURL(file);
 });
 
-document.querySelectorAll(".quick-item").forEach(btn=>{
-  btn.addEventListener("click",()=>{
-    const a=btn.dataset.action;
-    if(a==="fuel"){
-      document.querySelector(".fuel-card").scrollIntoView({behavior:"smooth",block:"center"});
-      setTimeout(()=>document.querySelector('[data-key="fuel"]').focus(),350);
-    }else if(a==="parking") toast("Парковки");
-    else if(a==="transponder") toast("Транспондер");
-    else toast("Сервис");
-  });
+photoInput.addEventListener("change", async e=>{
+  const file=e.target.files && e.target.files[0];
+  if(!file) return;
+  try{
+    await savePhoto(file);
+    img.src=URL.createObjectURL(file);
+    img.style.opacity="1";
+    toast("Фото автомобиля установлено");
+  }catch(err){
+    console.error(err);
+    toast("Не удалось сохранить фото");
+  }
+  photoInput.value="";
 });
 
 // Tapping the fine count only puts the caret there; no edit badges or pencils.
