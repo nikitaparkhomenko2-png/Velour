@@ -1,98 +1,12 @@
-const defaults = {
-  name:"Mercedes-Benz G-Класс AMG",
-  plate:"A 001 AA 01",
-  fines:"0",
-  price:"31 738 529 ₽",
-  priceLabel:"Цена Mercedes-Benz G-Класс AMG",
-  fuel:"55 л",
-  fuelPercent:"78%",
-  expenses:"Нет трат в мае"
-};
-
-const remoteCar = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Mercedes-Benz_G-Class.jpg";
-const saved = JSON.parse(localStorage.getItem("autoglass-data") || "null") || defaults;
-const imageKey = "autoglass-photo";
-const DB_NAME = "AutoGlassDB";
-const STORE_NAME = "photos";
-
-function openPhotoDB(){
-  return new Promise((resolve,reject)=>{
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function savePhoto(file){
-  const db = await openPhotoDB();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction(STORE_NAME,"readwrite");
-    tx.objectStore(STORE_NAME).put(file,imageKey);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function loadPhoto(){
-  try{
-    const db = await openPhotoDB();
-    return await new Promise((resolve,reject)=>{
-      const req = db.transaction(STORE_NAME,"readonly").objectStore(STORE_NAME).get(imageKey);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  }catch(e){ return null; }
-}
-
-const img = document.getElementById("carImage");
-const dots = document.getElementById("dots");
-const photoInput = document.getElementById("photoInput");
-
-img.src = "https://upload.wikimedia.org/wikipedia/commons/f/fe/Mercedes-Benz_G-Class.jpg";
-
-for(let i=0;i<5;i++){
-  const d=document.createElement("span");
-  d.className="dot"+(i===0?" active":"");
-  dots.appendChild(d);
-}
-
-function toast(msg){
-  const t=document.getElementById("toast");
-  t.textContent=msg;
-  t.classList.add("show");
-  clearTimeout(window.__toast);
-  window.__toast=setTimeout(()=>t.classList.remove("show"),1300);
-}
-
-loadPhoto().then(file=>{
-  if(file) img.src=URL.createObjectURL(file);
-});
-
-photoInput.addEventListener("change", async e=>{
-  const file=e.target.files && e.target.files[0];
-  if(!file) return;
-  try{
-    await savePhoto(file);
-    img.src=URL.createObjectURL(file);
-    img.style.opacity="1";
-    toast("Фото автомобиля установлено");
-  }catch(err){
-    console.error(err);
-    toast("Не удалось сохранить фото");
-  }
-  photoInput.value="";
-});
-
-// Tapping the fine count only puts the caret there; no edit badges or pencils.
-document.querySelector('[data-key="fines"]').addEventListener("click",e=>e.stopPropagation());
-
-// Small horizontal photo carousel feel: tap the car image to advance the indicator.
-let activeDot=0;
-document.querySelector(".photo-touch").addEventListener("dblclick",()=>{
-  activeDot=(activeDot+1)%5;
-  document.querySelectorAll(".dot").forEach((d,i)=>d.classList.toggle("active",i===activeDot));
-});
+const KEY='velour-v3';const DB='velour-photo-db';let state=JSON.parse(localStorage.getItem(KEY)||'null')||{cars:[{id:'1',name:'Mercedes-Benz G-Класс AMG',plate:'A 001 AA 01',fines:[{id:'f1',name:'Штраф за превышение скорости',amount:500,date:'21.09.2026',paid:false},{id:'f2',name:'Штраф за превышение скорости',amount:500,date:'18.09.2026',paid:false}]}]};let idx=0,view='cars',file=null;const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+function openDB(){return new Promise((ok,no)=>{let r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}async function putPhoto(id,f){let d=await openDB();return new Promise((ok,no)=>{let t=d.transaction('photos','readwrite');t.objectStore('photos').put(f,id);t.oncomplete=ok;t.onerror=()=>no(t.error)})}async function getPhoto(id){try{let d=await openDB();return await new Promise((ok,no)=>{let r=d.transaction('photos').objectStore('photos').get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}catch{return null}}
+const esc=s=>String(s||'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));function toast(s){let e=document.querySelector('.toast')||document.createElement('div');e.className='toast';e.textContent=s;document.body.append(e);requestAnimationFrame(()=>e.classList.add('show'));setTimeout(()=>e.classList.remove('show'),1300)}
+function fine(f,c){return `<div class="fine"><div class="ft"><div><div class="fn">${esc(f.name)}</div><div class="date">${esc(f.date)}</div></div><div class="money">${Number(f.amount).toLocaleString('ru-RU')} ₽</div></div><button class="pay ${f.paid?'paid':''}" data-pay="${c}:${f.id}">${f.paid?'Оплачено':'Оплатить'}</button></div>`}
+function cars(){return `<div class="top"><div class="logo">Velour</div><div class="count">${state.cars.length} ${state.cars.length===1?'машина':'машин'}</div></div><div class="viewport"><div class="track" id="track">${state.cars.map(c=>`<section class="car"><div class="name">${esc(c.name)}</div><div class="plate">${esc(c.plate)}</div><div class="photoBox" data-photo="${c.id}"><img id="im${c.id}" alt=""></div><div class="fh"><strong>Штрафы</strong><span class="badge ${c.fines.length?'red':'zero'}">${c.fines.length}</span></div>${c.fines.length?c.fines.map(f=>fine(f,c.id)).join(''):'<div class="empty">Нет штрафов</div>'}</section>`).join('')}</div></div><div class="dots">${state.cars.map((_,i)=>`<i class="dot ${i===idx?'on':''}"></i>`).join('')}</div><button class="add" id="add">＋ Добавить машину</button><div class="bottom"><button class="nav">🚗 Машины</button><button class="nav" id="fines">Штрафы</button></div>`}
+function add(){return `<div class="head"><button class="back" id="back">‹</button><div class="title">Добавить машину</div></div><div class="form"><label class="choose" id="choose">＋<br>Выберите фото машины</label><input class="field" id="n" placeholder="Название / марка"><input class="field" id="p" placeholder="Гос. номер"><input class="field" id="price" placeholder="Цена автомобиля"><button class="save" id="saveCar">Сохранить</button></div>`}
+function detail(){let c=state.cars[idx];return `<div class="head"><button class="back" id="back">‹</button><div><div class="title">${esc(c.name)}</div><div class="plate">${esc(c.plate)}</div></div></div><div class="card" style="padding:16px"><div class="photoBox"><img id="detailIm" alt=""></div><div class="fh"><strong>Штрафы</strong><span class="badge ${c.fines.length?'red':'zero'}">${c.fines.length}</span></div>${c.fines.length?c.fines.map(f=>fine(f,c.id)).join(''):'<div class="empty">Нет штрафов</div>'}</div>`}
+function render(){document.getElementById('app').innerHTML=view==='cars'?cars():view==='add'?add():detail();if(view==='cars')afterCars();if(view==='add')afterAdd();if(view==='detail')afterDetail()}
+function afterCars(){document.getElementById('track').style.transform=`translateX(-${idx*100}%)`;document.getElementById('add').onclick=()=>{view='add';render()};document.querySelectorAll('.pay').forEach(b=>b.onclick=pay);document.querySelectorAll('[data-photo]').forEach(e=>e.onclick=()=>{idx=state.cars.findIndex(c=>c.id===e.dataset.photo);view='detail';render()});let tr=document.getElementById('track'),x=0;tr.ontouchstart=e=>x=e.touches[0].clientX;tr.ontouchend=e=>{let d=e.changedTouches[0].clientX-x;if(Math.abs(d)>45){idx=Math.max(0,Math.min(state.cars.length-1,idx+(d<0?1:-1)));render()}};state.cars.forEach(c=>getPhoto(c.id).then(f=>{if(f){let im=document.getElementById('im'+c.id);if(im)im.src=URL.createObjectURL(f)}}));document.getElementById('fines').onclick=()=>{view='detail';render()}}
+function afterAdd(){document.getElementById('back').onclick=()=>{view='cars';render()};document.getElementById('choose').onclick=()=>document.getElementById('photo').click();document.getElementById('photo').onchange=e=>file=e.target.files[0]||null;document.getElementById('saveCar').onclick=async()=>{let c={id:crypto.randomUUID(),name:document.getElementById('n').value||'Моя машина',plate:document.getElementById('p').value||'Без номера',price:document.getElementById('price').value||'',fines:[]};state.cars.push(c);idx=state.cars.length-1;save();if(file)await putPhoto(c.id,file);file=null;view='cars';render();toast('Машина добавлена')}}
+function afterDetail(){document.getElementById('back').onclick=()=>{view='cars';render()};document.querySelectorAll('.pay').forEach(b=>b.onclick=pay);let c=state.cars[idx];getPhoto(c.id).then(f=>{if(f)document.getElementById('detailIm').src=URL.createObjectURL(f)})}
+function pay(e){let [cid,fid]=e.currentTarget.dataset.pay.split(':');let c=state.cars.find(x=>x.id===cid),f=c.fines.find(x=>x.id===fid);f.paid=true;save();render();toast('Штраф оплачен')}render();
