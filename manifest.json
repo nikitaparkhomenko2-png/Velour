@@ -1,1 +1,9 @@
-{"name": "AutoGlass", "short_name": "AutoGlass", "start_url": "./", "display": "standalone", "background_color": "#08080a", "theme_color": "#08080a", "lang": "ru"}
+{
+  "name": "Velour",
+  "short_name": "Velour",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "lang": "ru"
+}
